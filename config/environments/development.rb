@@ -65,8 +65,8 @@ environment_configuration(defined?(config) && config) do |config|
 
   # we use lots of db specific stuff - don't bother trying to dump to ruby
   # (it also takes forever)
-  config.active_record.schema_format = :sql
-  config.active_record.dump_schema_after_migration = false
+  # config.active_record.schema_format = :sql
+  config.active_record.dump_schema_after_migration = true
 
   config.eager_load = false
 

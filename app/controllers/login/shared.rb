@@ -92,6 +92,7 @@ module Login::Shared
     fullstory_init(@domain_root_account, session)
 
     respond_to do |format|
+      # binding.remote_pry
       if (oauth = session[:oauth2])
         provider = Canvas::OAuth::Provider.new(oauth[:client_id], oauth[:redirect_uri], oauth[:scopes], oauth[:purpose])
         return redirect_to Canvas::OAuth::Provider.confirmation_redirect(self, provider, user)

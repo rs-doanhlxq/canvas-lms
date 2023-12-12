@@ -50,3 +50,41 @@ class CreateLtiIMSRegistrations < ActiveRecord::Migration[7.0]
     drop_table :lti_ims_registrations
   end
 end
+
+# b = Lti::IMS::Registration.new(
+#   developer_key_id: 1,
+#   application_type: "web",
+#   grant_types: ["client_credentials", "implicit"],
+#   response_types: ["id_token"],
+#   redirect_uris: ["http://localhost"],
+#   initiate_login_uri: "https://example.com/login", 
+#   client_name: "the client name",
+#   jwks_uri: "https://example.com/api/jwks", 
+#   logo_uri: nil,
+#   token_endpoint_auth_method: "private_key_jwt", 
+#   contacts: [], client_uri: nil, 
+#   policy_uri: nil, tos_uri: nil, 
+#   scopes: [], 
+#   root_account_id: 2,
+#   registration_overlay: nil,
+#   lti_tool_configuration:
+#   {
+#     "domain" => "example.com",
+#     "messages" => [{
+#       "type" => "LtiResourceLinkRequest",
+#       "label" => "deep link label",
+#       "placements" => ["course_navigation"],
+#       "target_link_uri" => "https://example.com/launch",
+#       "custom_parameters" => {
+#         "foo" => "bar"
+#       },
+#       "roles" => [
+#         "http://purl.imsglobal.org/vocab/lis/v2/membership#ContentDeveloper",
+#         "http://purl.imsglobal.org/vocab/lis/v2/membership#Instructor"
+#       ],
+#       "icon_uri" => "https://example.com/icon.jpg"
+#     }],
+#     "claims" => ["iss", "sub"],
+#     "target_link_uri" => "https://example.com/launch",
+#     }
+#   )

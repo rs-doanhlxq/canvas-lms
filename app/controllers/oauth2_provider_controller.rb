@@ -19,10 +19,12 @@
 #
 
 class OAuth2ProviderController < ApplicationController
+  include Login::Shared
+
   rescue_from Canvas::OAuth::RequestError, with: :oauth_error
-  protect_from_forgery except: %i[token destroy], with: :exception
-  before_action :run_login_hooks, only: %i[token]
-  skip_before_action :require_reacceptance_of_terms, only: %i[token destroy]
+  protect_from_forgery except: %i[token destroy login_with_api], with: :exception
+  before_action :run_login_hooks, only: %i[token login_with_api]
+  skip_before_action :require_reacceptance_of_terms, only: %i[token destroy login_with_api]
 
   def auth
     if params[:code] || params[:error]
@@ -73,7 +75,7 @@ class OAuth2ProviderController < ApplicationController
                                                                   state: params[:state],
                                                                   error: "login_required",
                                                                   error_description: "prompt=none but there is no current session")
-      elsif !provider.authorized_token?(@current_user, real_user: logged_in_user)
+      elsif provider.authorized_token?(@current_user, real_user: logged_in_user)
         return redirect_to Canvas::OAuth::Provider.final_redirect(self,
                                                                   state: params[:state],
                                                                   error: "interaction_required",
@@ -182,7 +184,138 @@ class OAuth2ProviderController < ApplicationController
     render json: response
   end
 
+
+  def login_with_api
+    found = PseudonymSession.with_scope(find_options: @domain_root_account.pseudonyms) do
+      @pseudonym_session = PseudonymSession.new(params[:pseudonym_session].permit(:unique_id, :password, :remember_me).to_h)
+      @pseudonym_session.remote_ip = request.remote_ip
+      @pseudonym_session.save
+    end
+
+     # look for LDAP pseudonyms where we get the unique_id back from LDAP, or if we're doing JIT provisioning
+     if !found && !@pseudonym_session.attempted_record
+      found = @domain_root_account.authentication_providers.active.where(auth_type: "ldap").any? do |aac|
+        next unless aac.identifier_format.present? || aac.jit_provisioning?
+
+        res = aac.ldap_bind_result(params[:pseudonym_session][:unique_id], params[:pseudonym_session][:password])
+        next unless res
+
+        unique_id = if aac.identifier_format.present?
+                      res.first[aac.identifier_format].first
+                    else
+                      params[:pseudonym_session][:unique_id]
+                    end
+        next unless unique_id
+
+        pseudonym = @domain_root_account.pseudonyms.for_auth_configuration(unique_id, aac)
+        pseudonym ||= aac.provision_user(unique_id) if aac.jit_provisioning?
+        next unless pseudonym
+
+        pseudonym.instance_variable_set(:@ldap_result, res.first)
+        pseudonym.infer_auth_provider(aac)
+        @pseudonym_session = PseudonymSession.new(pseudonym, params[:pseudonym_session][:remember_me] == "1")
+        @pseudonym_session.save
+        session[:login_aac] = aac.id
+      end
+    end
+
+    if !found && params[:pseudonym_session]
+      pseudonym = Pseudonym.authenticate(params[:pseudonym_session],
+                                         @domain_root_account.trusted_account_ids,
+                                         request.remote_ip)
+      if pseudonym.is_a?(Pseudonym)
+        @pseudonym_session = PseudonymSession.new(pseudonym, params[:pseudonym_session][:remember_me] == "1")
+        found = @pseudonym_session.save
+      end
+    end
+
+    case @pseudonym_session&.login_error || pseudonym
+    when :impossible_credentials
+      unsuccessful_login t("Invalid username or password")
+      return
+    when :too_many_attempts
+      unsuccessful_login t("Too many failed login attempts. Please try again later or contact your system administrator.")
+      return
+    when :too_recent_login
+      unsuccessful_login t("You have recently logged in multiple times too quickly. Please wait a few seconds and try again.")
+      return
+    end
+
+    pseudonym = @pseudonym_session&.record
+    # If the user's @domain_root_account has been deleted, feel free to share that information
+    if pseudonym && (!pseudonym.user || pseudonym.user.unavailable?)
+      unsuccessful_login t("That user account has been deleted.  Please contact your system administrator to have your account re-activated.")
+      return
+    end
+
+    if found && (user = pseudonym.login_assertions_for_user)
+      # Call for some cleanups that should be run when a user logs in
+
+      ap = pseudonym.authentication_provider
+
+      session[:login_aac] ||= ap.id
+      success_login_with_api(user, pseudonym)
+    else
+      return render json: { message: "can't delete OAuth access token when not using an OAuth access token" }, status: :bad_request
+    end
+
+  end
+
   private
+
+  def success_login_with_api(user, pseudonym)
+    basic_user, basic_pass = ActionController::HttpAuthentication::Basic.user_name_and_password(request) if request.authorization
+
+    client_id = params[:pseudonym_session][:client_id].presence || basic_user
+    secret = params[:pseudonym_session][:client_secret].presence || basic_pass
+
+    granter = case params[:pseudonym_session][:grant_type]
+    when "authorization_code"
+      params[:pseudonym_session][:code] = Canvas::OAuth::Token.generate_code_for(@current_user.global_id, @current_user&.global_id, client_id)
+      Canvas::OAuth::GrantTypes::AuthorizationCode.new(client_id, secret, params[:pseudonym_session])
+    when "refresh_token"
+      Canvas::OAuth::GrantTypes::RefreshToken.new(client_id, secret, params[:pseudonym_session])
+    when "client_credentials"
+      Canvas::OAuth::GrantTypes::ClientCredentials.new(
+        params[:pseudonym_session],
+        request.host_with_port,
+        @domain_root_account,
+        request.protocol
+      )
+    else
+      Canvas::OAuth::GrantTypes::BaseType.new(client_id, secret, params[:pseudonym_session])
+    end
+
+    raise Canvas::OAuth::RequestError, :unsupported_grant_type unless granter.supported_type?
+
+    token = granter.token
+    # make sure locales are set up
+    if token.is_a?(Canvas::OAuth::Token)
+      @current_user = token.user
+      assign_localizer
+      I18n.set_locale_with_localizer
+    end
+    binding.pry_remote
+
+    increment_request_cost(Setting.get("oauth_token_additional_request_cost", "200").to_i)
+
+    render json: token
+  end
+
+  def unsuccessful_login(message)
+    if request.format.json?
+      return render json: { errors: [message] }, status: :bad_request
+    end
+
+    flash[:error] = if mobile_device?
+                      message
+                    else
+                      { html: message, timeout: 15_000 }
+                    end
+    @errored = true
+    @headers = false
+    maybe_render_mobile_login :bad_request
+  end
 
   def oauth_error(exception)
     response["WWW-Authenticate"] = "Canvas OAuth 2.0" if exception.http_status == 401

@@ -455,6 +455,7 @@ GEM
       sorbet-runtime (>= 0.5.10821)
     code_teams (1.0.2)
       sorbet-runtime
+    coderay (1.1.3)
     coercible (1.0.0)
       descendants_tracker (~> 0.0.1)
     colored (1.2)
@@ -827,6 +828,12 @@ GEM
       prawn (>= 1.3.0, < 3.0.0)
     promise.rb (0.7.4)
     prosopite (1.4.1)
+    pry (0.14.2)
+      coderay (~> 1.1)
+      method_source (~> 1.0)
+    pry-remote (0.1.8)
+      pry (~> 0.9)
+      slop (~> 3.0)
     psych (5.1.1.1)
       stringio
     public_suffix (5.0.4)
@@ -839,6 +846,8 @@ GEM
     rack-brotli (1.2.0)
       brotli (>= 0.1.7)
       rack (>= 1.4)
+    rack-cors (2.0.1)
+      rack (>= 2.0.0)
     rack-test (2.1.0)
       rack (>= 1.3)
     rails (7.0.8)
@@ -1036,6 +1045,7 @@ GEM
     simplecov_json_formatter (0.1.4)
     simpleidn (0.2.1)
       unf (~> 0.1.4)
+    slop (3.6.0)
     snaky_hash (2.0.1)
       hashie
       version_gem (~> 1.1, >= 1.1.1)
@@ -1279,9 +1289,11 @@ DEPENDENCIES
   prawn-emoji (~> 5.3)
   prawn-rails (~> 1.4)
   prosopite (~> 1.3)
+  pry-remote
   puma (~> 6.3)
   qti_exporter!
   rack-brotli (~> 1.2)
+  rack-cors
   rails (~> 7.0.4)
   rails-controller-testing (= 1.0.5)
   rails-observers (= 0.1.5)

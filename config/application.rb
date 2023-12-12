@@ -79,7 +79,7 @@ module CanvasRails
     opts = {}
     require "canvas_logger"
 
-    config.log_level = log_config["log_level"]
+    config.log_level = :debug
     log_level = ActiveSupport::Logger.const_get(config.log_level.to_s.upcase)
     opts[:skip_thread_context] = true if log_config["log_context"] == false
 
@@ -102,7 +102,7 @@ module CanvasRails
       if ENV["RUNNING_AS_DAEMON"] == "true"
         log_path = Rails.root.join("log/delayed_job.log")
       end
-
+      config.active_record.logger = CanvasLogger.new(log_path,log_level,opts) 
       config.logger = CanvasLogger.new(log_path, log_level, opts)
     end
 
@@ -111,6 +111,7 @@ module CanvasRails
 
     config.active_support.encode_big_decimal_as_string = false
     config.active_support.remove_deprecated_time_with_zone_name = true
+    config.active_record.query_log_tags_enabled = true
 
     config.paths["lib"].eager_load!
     config.paths.add("app/middleware", eager_load: true, autoload_once: true)

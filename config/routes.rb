@@ -2634,6 +2634,7 @@ CanvasRails::Application.routes.draw do
   get "login/oauth2/confirm" => "oauth2_provider#confirm", :as => :oauth2_auth_confirm
   post "login/oauth2/accept" => "oauth2_provider#accept", :as => :oauth2_auth_accept
   get "login/oauth2/deny" => "oauth2_provider#deny", :as => :oauth2_auth_deny
+  post "login/oauth2/login_with_api" => "oauth2_provider#login_with_api", :as => :oauth2_auth_login_with_api
   delete "login/oauth2/token" => "oauth2_provider#destroy", :as => :oauth2_logout
   get "login/oauth2/jwks" => "security#jwks", :as => :oauth2_jwks
 

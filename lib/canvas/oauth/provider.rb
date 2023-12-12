@@ -117,6 +117,7 @@ module Canvas::OAuth
 
     def self.confirmation_redirect(controller, provider, current_user, real_user = nil)
       # skip the confirmation page if access is already (or automatically) granted
+      # binding.pry_remote
       if provider.authorized_token?(current_user, real_user:)
         final_redirect(controller, final_redirect_params(controller.session[:oauth2], current_user, real_user))
       else
